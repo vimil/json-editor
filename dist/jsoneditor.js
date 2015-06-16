@@ -3236,6 +3236,22 @@ JSONEditor.defaults.editors.array = JSONEditor.AbstractEditor.extend({
 
         this.active_tab = null;
       }
+	  else if(this.schema.format === 'dropdown') {
+		this.controls = this.theme.getHeaderButtonHolder();
+        this.title.appendChild(this.controls);
+        this.dropdown_holder = this.theme.getDropDownHolder();
+        this.container.appendChild(this.dropdown_holder);
+        this.row_holder = this.theme.getDropDownContentHolder(this.dropdown_holder);
+		
+		this.dropdown_holder.dropdown.addEventListener('change', function(e) {
+			self.active_dropdown_option = e.target.options[e.target.selectedIndex];
+			self.refreshNavigator();
+			e.preventDefault();
+			e.stopPropagation();
+		});
+		
+		this.active_dropdown_option = null;
+	  }
       else {
         this.panel = this.theme.getIndentedPanel();
         this.container.appendChild(this.panel);
@@ -3259,7 +3275,7 @@ JSONEditor.defaults.editors.array = JSONEditor.AbstractEditor.extend({
   },
   onChildEditorChange: function(editor) {
     this.refreshValue();
-    this.refreshTabs(true);
+    this.refreshNavigator(true);
     this._super(editor);
   },
   getItemTitle: function() {
@@ -3402,26 +3418,43 @@ JSONEditor.defaults.editors.array = JSONEditor.AbstractEditor.extend({
       return this.schema.maxItems || Infinity;
     }
   },
-  refreshTabs: function(refresh_headers) {
+  refreshNavigator: function(refresh_headers) {
     var self = this;
     $each(this.rows, function(i,row) {
-      if(!row.tab) return;
-
-      if(refresh_headers) {
-        row.tab_text.textContent = row.getHeaderText();
-      }
-      else {
-        if(row.tab === self.active_tab) {
-          self.theme.markTabActive(row.tab);
-          row.container.style.display = '';
-        }
-        else {
-          self.theme.markTabInactive(row.tab);
-          row.container.style.display = 'none';
-        }
-      }
+      if(row.tab) {
+		  if(refresh_headers) {
+			row.tab_text.textContent = row.getHeaderText();
+		  }
+		  else {
+			if(row.tab === self.active_tab) {
+			  self.theme.markTabActive(row.tab);
+			  row.container.style.display = '';
+			}
+			else {
+			  self.theme.markTabInactive(row.tab);
+			  row.container.style.display = 'none';
+			}
+		  }
+	  }
+	  else if(row.dropdown_option) {
+		  if(refresh_headers) {
+			row.dropdown_option.text = row.getHeaderText();
+			row.dropdown_option.value = row.dropdown_option.text;
+		  }
+		  else {
+			if(row.dropdown_option === self.active_dropdown_option) {
+			  self.theme.markDropDownOptionActive(row.dropdown_option);
+			  row.container.style.display = '';
+			}
+			else {
+			  self.theme.markDropDownOptionInactive(row.dropdown_option);
+			  row.container.style.display = 'none';
+			}
+		  }
+	  }
     });
   },
+
   setValue: function(value, initial) {
     // Update the array's value, adding/removing rows when necessary
     value = value || [];
@@ -3476,10 +3509,22 @@ JSONEditor.defaults.editors.array = JSONEditor.AbstractEditor.extend({
     if(!new_active_tab && self.rows.length) new_active_tab = self.rows[0].tab;
 
     self.active_tab = new_active_tab;
+	
+	//Set the active dropdown_option
+	var new_active_dropdown_option = null;
+    $each(self.rows, function(i,row) {
+      if(row.dropdown_option === self.active_dropdown_option) {
+        new_active_dropdown_option = row.dropdown_option;
+        return false;
+      }
+    });
+    if(!new_active_dropdown_option && self.rows.length) new_active_dropdown_option = self.rows[0].dropdown_option;
 
+    self.active_dropdown_option = new_active_dropdown_option;
+	
     self.refreshValue(initial);
-    self.refreshTabs(true);
-    self.refreshTabs();
+    self.refreshNavigator(true);
+    self.refreshNavigator();
 
     self.onChange();
     
@@ -3585,14 +3630,18 @@ JSONEditor.defaults.editors.array = JSONEditor.AbstractEditor.extend({
       self.rows[i].tab = self.theme.getTab(self.rows[i].tab_text);
       self.rows[i].tab.addEventListener('click', function(e) {
         self.active_tab = self.rows[i].tab;
-        self.refreshTabs();
+        self.refreshNavigator();
         e.preventDefault();
         e.stopPropagation();
       });
 
       self.theme.addTab(self.tabs_holder, self.rows[i].tab);
     }
-    
+    else if(self.dropdown_holder) {
+      self.rows[i].dropdown_option = self.theme.getDropDownOption(self.rows[i].getHeaderText());
+	  self.theme.addDropDownOption(self.dropdown_holder, self.rows[i].dropdown_option);
+	}
+	
     var controls_holder = self.rows[i].title_controls || self.rows[i].array_controls;
     
     // Buttons to delete row, move row up, and move row down
@@ -3627,7 +3676,7 @@ JSONEditor.defaults.editors.array = JSONEditor.AbstractEditor.extend({
         self.setValue(newval);
         if(new_active_tab) {
           self.active_tab = new_active_tab;
-          self.refreshTabs();
+          self.refreshNavigator();
         }
 
         self.onChange(true);
@@ -3655,7 +3704,7 @@ JSONEditor.defaults.editors.array = JSONEditor.AbstractEditor.extend({
 
         self.setValue(rows);
         self.active_tab = self.rows[i-1].tab;
-        self.refreshTabs();
+        self.refreshNavigator();
 
         self.onChange(true);
       });
@@ -3682,7 +3731,7 @@ JSONEditor.defaults.editors.array = JSONEditor.AbstractEditor.extend({
 
         self.setValue(rows);
         self.active_tab = self.rows[i+1].tab;
-        self.refreshTabs();
+        self.refreshNavigator();
         self.onChange(true);
       });
       
@@ -3692,7 +3741,7 @@ JSONEditor.defaults.editors.array = JSONEditor.AbstractEditor.extend({
     }
 
     if(value) self.rows[i].setValue(value, initial);
-    self.refreshTabs();
+    self.refreshNavigator();
   },
   addControls: function() {
     var self = this;
@@ -3753,7 +3802,7 @@ JSONEditor.defaults.editors.array = JSONEditor.AbstractEditor.extend({
         self.addRow();
       }
       self.active_tab = self.rows[i].tab;
-      self.refreshTabs();
+      self.refreshNavigator();
       self.refreshValue();
       self.onChange(true);
     });
@@ -3772,7 +3821,7 @@ JSONEditor.defaults.editors.array = JSONEditor.AbstractEditor.extend({
       self.setValue(rows);
       if(new_active_tab) {
         self.active_tab = new_active_tab;
-        self.refreshTabs();
+        self.refreshNavigator();
       }
       self.onChange(true);
     });
@@ -5778,6 +5827,13 @@ JSONEditor.AbstractTheme = Class.extend({
     el.innerHTML = "<div style='float: left; width: 130px;' class='tabs'></div><div class='content' style='margin-left: 130px;'></div><div style='clear:both;'></div>";
     return el;
   },
+  getDropDownHolder: function() {
+    var el = document.createElement('div');
+    el.className = 'tabbable tabs-left';
+    el.innerHTML = "<select></select><div class='tab-content span10' style='overflow:visible;'></div>";
+	el.dropdown = el.children[0];
+    return el;
+  },
   applyStyles: function(el,styles) {
     el.style = el.style || {};
     for(var i in styles) {
@@ -5840,6 +5896,25 @@ JSONEditor.AbstractTheme = Class.extend({
   },
   addTab: function(holder, tab) {
     holder.children[0].appendChild(tab);
+  },
+  getDropDownOption: function(text) {
+	var el = document.createElement('OPTION');
+	el.text = text;
+	el.value= text;	
+    return el;
+  },
+  getDropDownContentHolder: function(dropdown_holder) {
+    return dropdown_holder.children[1];
+  },
+  getDropDownContent: function(dropdown_holder) {
+    return this.getIndentedPanel();
+  },
+  markDropDownOptionActive: function(dropdown_option) {
+  },
+  markDropDownOptionInactive: function(dropdown_option) {
+  },
+  addDropDownOption: function(holder, dropdown_option) {
+    holder.children[0].appendChild(dropdown_option);
   },
   getBlockLink: function() {
     var link = document.createElement('a');
@@ -6006,7 +6081,7 @@ JSONEditor.defaults.themes.bootstrap2 = JSONEditor.AbstractTheme.extend({
     return el;
   },
   getTabContentHolder: function(tab_holder) {
-    return tab_holder.children[1];
+    return tab_holder.children[1];	
   },
   getTabContent: function() {
     var el = document.createElement('div');
@@ -6020,7 +6095,7 @@ JSONEditor.defaults.themes.bootstrap2 = JSONEditor.AbstractTheme.extend({
     tab.className = tab.className.replace(/\s?active/g,'');
   },
   addTab: function(holder, tab) {
-    holder.children[0].appendChild(tab);
+   holder.children[0].appendChild(tab);
   },
   getProgressBar: function() {
     var container = document.createElement('div');
